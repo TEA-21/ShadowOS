@@ -5,6 +5,10 @@ members = [
     "crates/shadow-vmm",
     "crates/shadow-vsock",
     "crates/shadow-guest-agent",
+    "crates/shadow-cli",
+    "crates/shadow-cow",
+    "crates/shadow-snapshot",
+    "crates/shadow-tui",
 ]
 
 [workspace.package]
@@ -24,3 +28,9 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 async-trait = "0.1"
 anyhow = "1.0"
+clap = { version = "4.5", features = ["derive", "cargo"] }
+ratatui = "0.26"
+crossterm = "0.27"
+similar = { version = "2.5", features = ["bytes", "inline"] }
+tempfile = "3.10"
+sha2 = "0.10"

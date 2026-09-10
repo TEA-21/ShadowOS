@@ -1,0 +1,18 @@
+[package]
+name = "shadow-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+shadow-core = { path = "../shadow-core" }
+shadow-cow = { path = "../shadow-cow" }
+ratatui.workspace = true
+crossterm.workspace = true
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+anyhow.workspace = true

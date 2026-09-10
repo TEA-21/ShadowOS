@@ -1,0 +1,19 @@
+[package]
+name = "shadow-cow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+shadow-core = { path = "../shadow-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+tempfile.workspace = true
+sha2.workspace = true
+similar.workspace = true

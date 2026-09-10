@@ -1,0 +1,19 @@
+[package]
+name = "shadow-snapshot"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+shadow-core = { path = "../shadow-core" }
+shadow-vmm = { path = "../shadow-vmm" }
+shadow-cow = { path = "../shadow-cow" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+tempfile.workspace = true

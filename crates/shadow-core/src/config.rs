@@ -1,10 +1,52 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HypervisorType {
     Firecracker,
     Libkrun,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CachePolicy {
+    Always,
+    Auto,
+    None,
+    AlwaysDax,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SandboxMode {
+    Chroot,
+    Namespace,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VirtiofsMountConfig {
+    pub tag: String,
+    pub socket_path: PathBuf,
+    pub shared_dir: PathBuf,
+    pub cache_policy: CachePolicy,
+    pub sandbox_mode: SandboxMode,
+    pub thread_pool_size: usize,
+    pub read_only: bool,
+    pub dax_window_size_mib: u64,
+}
+
+impl Default for VirtiofsMountConfig {
+    fn default() -> Self {
+        Self {
+            tag: "shadow-workspace".to_string(),
+            socket_path: PathBuf::from("/run/shadow_virtiofs.sock"),
+            shared_dir: PathBuf::from("/tmp/shadow_workspace"),
+            cache_policy: CachePolicy::AlwaysDax,
+            sandbox_mode: SandboxMode::Chroot,
+            thread_pool_size: 4,
+            read_only: true,
+            dax_window_size_mib: 1024, // 1GB DAX mapping window
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,4 +96,5 @@ pub struct VmConfig {
     pub vsock_port: u32,
     pub resources: ResourceLimits,
     pub security: SecurityPolicy,
+    pub virtiofs: VirtiofsMountConfig,
 }

@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/shadow-core",
+    "crates/shadow-vmm",
+    "crates/shadow-vsock",
+    "crates/shadow-guest-agent",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ShadowOS Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/TEA-21/ShadowOS"
+
+[workspace.dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bytes = "1.6"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+async-trait = "0.1"
+anyhow = "1.0"

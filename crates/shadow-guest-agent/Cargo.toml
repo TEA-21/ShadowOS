@@ -1,0 +1,21 @@
+[package]
+name = "shadow-guest-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "shadow-guest-agent"
+path = "src/main.rs"
+
+[dependencies]
+shadow-core = { path = "../shadow-core" }
+tokio = { version = "1.38", default-features = false, features = ["rt", "process", "io-util", "net", "sync", "macros", "time"] }
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+anyhow.workspace = true

@@ -1,38 +1,61 @@
 # Project ShadowOS — Implementation Progress Tracking
 
 ## Current Active Phase
-- **Phase 1 (M1 Core Engine) — Architecture & Technical Specifications Finalized**
-- Prepared for Phase 1 code scaffolding and driver development.
+- **Phase 1: M1 Core Engine — Workspace Scaffolding & Milestone 1.1 Complete**
+- Transitioning into **Milestone 1.2: VMM Driver Engine & Mock Hypervisor Socket Test Harness**.
 
 ## Completed Steps & Exact Techniques/Libraries Used
-1. **PRD & Requirements Discovery:**
-   - Extracted complete technical context, architecture specifications, and non-functional requirements from `shadowos_prd.pdf` and `plan.md`.
-2. **Phase 1 Implementation Guide Generation (`phase1_implementation.md`):**
-   - Detailed dual-hypervisor architecture (Firecracker KVM jailer on Linux, libkrun on macOS Apple Silicon).
-   - Designed stripped Linux kernel (6.6 LTS uncompressed `vmlinux`, ~4.1MB, stripped ACPI/PCI/Sound/USB) and minimal Alpine rootfs (~18MB).
-   - Designed `virtio-fs` host-to-guest shared directory bridge via `virtiofsd` (Rust).
-   - Specified Zero-TCP `AF_VSOCK` communication channel (CID 2 <-> CID 3, Port 5001) with custom length-prefixed binary framing (`ShadowFrame`).
-   - Addressed NFRs: Sub-150ms boot, <150MB base RAM, >=85% native NVMe I/O via DAX.
-3. **Phase 2 Implementation Guide Generation (`phase2_implementation.md`):**
-   - Designed `shadow-cli` wrapper for transparent agent invocation (e.g., `claude -p "..." --dangerously-skip-permissions`).
-   - Designed Ephemeral Copy-on-Write (CoW) filesystem using guest OverlayFS (`lowerdir` read-only host repo, `upperdir` ephemeral tmpfs RAM-disk).
-   - Engineered sub-100ms state rollback mechanism using memory-mapped RAM snapshots in `/dev/shm` combined with overlay upperdir clearing (~60ms roundtrip).
-   - Designed unified Git-diff inspector and promotion TUI using `ratatui`, `git2`, and `similar`.
-   - Addressed NFRs: Sub-100ms rollback latency, <=2.5GB peak RAM cap via cgroups v2 & virtio-ballooning, 0 host incidents.
-4. **Phase 3 Implementation Guide Generation (`phase3_implementation.md`):**
-   - Designed Model Context Protocol (MCP) daemon server for Google Antigravity IDE exposing primitives: `run_sandboxed_cmd`, `inspect_virtual_dom`, `capture_browser_screenshot`, `rollback_checkpoint`, `promote_changes`.
-   - Designed in-memory headless virtual display (`Xvfb :99` in `/dev/shm`, ~1.8MB) and headless Chromium with CDP bridge over `AF_VSOCK` (port 5002) to prevent host focus-stealing.
-   - Engineered multi-agent swarm orchestrator with branching CoW upper layers and CPU/memory quota governors.
-   - Addressed NFRs: >3.5x wall-clock task speedup, zero host focus disruption, <200MB idle RAM.
+1. **Remote Repository Synchronization:**
+   - Initialized Git repository tracking `main`.
+   - Connected remote `https://github.com/TEA-21/ShadowOS.git`.
+   - Committed and pushed documentation suite: `plan.md`, `phase1_implementation.md`, `phase2_implementation.md`, `phase3_implementation.md`, `shadowos_prd.pdf`, and `.gitignore`.
+2. **Rust Workspace Scaffolding:**
+   - Created workspace root `Cargo.toml` with unified dependency resolution and crate configurations.
+   - **`crates/shadow-core`:**
+     - `error.rs`: Defined comprehensive `ShadowError` enum with `thiserror` covering I/O, VMM, VSOCK, Protocol, and Filesystem variants.
+     - `config.rs`: Implemented `VmConfig`, `ResourceLimits`, `SecurityPolicy`, and `HypervisorType`.
+     - `protocol.rs`: Implemented the `ShadowFrame` zero-TCP multiplexed binary framing protocol (Magic: `0x53 0x4F`, `MessageType`, `StreamId`, big-endian payload length) with `bytes` and `serde_json`.
+   - **`crates/shadow-vmm`:**
+     - `traits.rs`: Defined `VMMDriver` async trait (`init`, `start`, `pause`, `resume`, `stop`, `is_alive`, `snapshot`, `restore`).
+     - `firecracker.rs`: Implemented Firecracker UDS REST driver and jailer process launcher with differential snapshot support.
+     - `libkrun.rs`: Implemented macOS Apple Silicon `libkrun` hypervisor abstraction.
+     - `virtiofs.rs`: Implemented `VirtiofsDaemon` process manager for `virtiofsd` host-to-guest shared directory.
+   - **`crates/shadow-vsock`:**
+     - `channel.rs`: Implemented `VsockChannel` Tokio mpsc queue pairing for asynchronous frame transport.
+     - `host_stream.rs`: Implemented `HostVsockMultiplexer` for streaming command dispatch and stdout/stderr/exit demultiplexing.
+   - **`crates/shadow-guest-agent`:**
+     - `main.rs`: Guest agent daemon entry point listening on AF_VSOCK port 5001.
+     - `vsock_server.rs`: Packet dispatcher for incoming `CmdReq` and `Heartbeat` frames.
+     - `exec.rs`: Asynchronous process spawner piping child stdout/stderr streams into `ShadowFrame` chunks and emitting `ExitNotification`.
+3. **Kernel & Rootfs Toolchain (Milestone 1.1):**
+   - `scripts/build-kernel.sh`: Automated toolchain compiling Linux LTS 6.6 stripped uncompressed `vmlinux` (<4.5MB) with minimal VirtIO, VSOCK, and OverlayFS drivers.
+   - `scripts/build-rootfs.sh`: Automated toolchain assembling minimal Alpine-based ext4 rootfs (<25MB) bundling BusyBox, custom `/init` script, and statically compiled `shadow-guest-agent`.
 
 ## Files Created or Modified
-- [plan.md](file:///d:/Projects/ShadowOS/plan.md) — Existing roadmap reference.
-- [shadowos_prd.pdf](file:///d:/Projects/ShadowOS/shadowos_prd.pdf) — Project Requirements Document.
-- [phase1_implementation.md](file:///d:/Projects/ShadowOS/phase1_implementation.md) — Technical implementation guide for Phase 1 (M1 Core Engine).
-- [phase2_implementation.md](file:///d:/Projects/ShadowOS/phase2_implementation.md) — Technical implementation guide for Phase 2 (M2 Harness Tooling).
-- [phase3_implementation.md](file:///d:/Projects/ShadowOS/phase3_implementation.md) — Technical implementation guide for Phase 3 (M3 Ecosystem Expansion).
-- [PROGRESS.md](file:///d:/Projects/ShadowOS/PROGRESS.md) — Execution progress tracker.
+- [Cargo.toml](file:///d:/Projects/ShadowOS/Cargo.toml) — Root workspace configuration.
+- [crates/shadow-core/Cargo.toml](file:///d:/Projects/ShadowOS/crates/shadow-core/Cargo.toml)
+- [crates/shadow-core/src/lib.rs](file:///d:/Projects/ShadowOS/crates/shadow-core/src/lib.rs)
+- [crates/shadow-core/src/error.rs](file:///d:/Projects/ShadowOS/crates/shadow-core/src/error.rs)
+- [crates/shadow-core/src/config.rs](file:///d:/Projects/ShadowOS/crates/shadow-core/src/config.rs)
+- [crates/shadow-core/src/protocol.rs](file:///d:/Projects/ShadowOS/crates/shadow-core/src/protocol.rs)
+- [crates/shadow-vmm/Cargo.toml](file:///d:/Projects/ShadowOS/crates/shadow-vmm/Cargo.toml)
+- [crates/shadow-vmm/src/lib.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/lib.rs)
+- [crates/shadow-vmm/src/traits.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/traits.rs)
+- [crates/shadow-vmm/src/firecracker.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/firecracker.rs)
+- [crates/shadow-vmm/src/libkrun.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/libkrun.rs)
+- [crates/shadow-vmm/src/virtiofs.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/virtiofs.rs)
+- [crates/shadow-vsock/Cargo.toml](file:///d:/Projects/ShadowOS/crates/shadow-vsock/Cargo.toml)
+- [crates/shadow-vsock/src/lib.rs](file:///d:/Projects/ShadowOS/crates/shadow-vsock/src/lib.rs)
+- [crates/shadow-vsock/src/channel.rs](file:///d:/Projects/ShadowOS/crates/shadow-vsock/src/channel.rs)
+- [crates/shadow-vsock/src/host_stream.rs](file:///d:/Projects/ShadowOS/crates/shadow-vsock/src/host_stream.rs)
+- [crates/shadow-guest-agent/Cargo.toml](file:///d:/Projects/ShadowOS/crates/shadow-guest-agent/Cargo.toml)
+- [crates/shadow-guest-agent/src/main.rs](file:///d:/Projects/ShadowOS/crates/shadow-guest-agent/src/main.rs)
+- [crates/shadow-guest-agent/src/exec.rs](file:///d:/Projects/ShadowOS/crates/shadow-guest-agent/src/exec.rs)
+- [crates/shadow-guest-agent/src/vsock_server.rs](file:///d:/Projects/ShadowOS/crates/shadow-guest-agent/src/vsock_server.rs)
+- [scripts/build-kernel.sh](file:///d:/Projects/ShadowOS/scripts/build-kernel.sh)
+- [scripts/build-rootfs.sh](file:///d:/Projects/ShadowOS/scripts/build-rootfs.sh)
+- [PROGRESS.md](file:///d:/Projects/ShadowOS/PROGRESS.md)
 
 ## Next Immediate Action
-- Await user review and confirmation of Phase 1, Phase 2, and Phase 3 technical guides.
-- Initialize the Rust workspace structure (`crates/shadow-core`, `crates/shadow-vmm`, `crates/shadow-vsock`, `crates/shadow-guest-agent`) to begin Milestone 1.1 execution.
+- Stage, commit, and push the newly scaffolded Rust crates and build scripts to `origin/main`.
+- Begin Milestone 1.2: Implement mock hypervisor UDS socket server and unit test suites for `shadow-core` protocol encoding/decoding and `shadow-vmm` lifecycle states.

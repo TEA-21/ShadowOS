@@ -1,7 +1,8 @@
+use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use shadow_core::{
     protocol::{CommandRequest, ExitNotification, MessageType, ShadowFrame, StreamId},
     Result, ShadowError,
@@ -14,14 +15,25 @@ impl CommandExecutor {
         req: CommandRequest,
         frame_tx: Sender<ShadowFrame>,
     ) -> Result<i32> {
+        Self::run_with_stdin(req, frame_tx, None).await
+    }
+
+    pub async fn run_with_stdin(
+        req: CommandRequest,
+        frame_tx: Sender<ShadowFrame>,
+        mut stdin_rx: Option<Receiver<Vec<u8>>>,
+    ) -> Result<i32> {
         let start = std::time::Instant::now();
         let mut cmd = Command::new(&req.cmd);
         cmd.args(&req.args);
-        
-        let workdir = if req.workdir.is_empty() {
+
+        // Verify workdir existence or fall back cleanly
+        let workdir = if !req.workdir.is_empty() && Path::new(&req.workdir).exists() {
+            &req.workdir
+        } else if Path::new("/workspace").exists() {
             "/workspace"
         } else {
-            &req.workdir
+            "."
         };
         cmd.current_dir(workdir);
 
@@ -30,7 +42,12 @@ impl CommandExecutor {
             cmd.env(k, v);
         }
 
-        cmd.stdin(Stdio::null());
+        if stdin_rx.is_some() {
+            cmd.stdin(Stdio::piped());
+        } else {
+            cmd.stdin(Stdio::null());
+        }
+
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
@@ -39,9 +56,22 @@ impl CommandExecutor {
         let mut child = cmd.spawn().map_err(|e| {
             ShadowError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Failed to spawn child process: {}", e),
+                format!("Failed to spawn child process '{}': {}", req.cmd, e),
             ))
         })?;
+
+        // Pipe stdin if active
+        if let Some(mut rx) = stdin_rx.take() {
+            if let Some(mut child_in) = child.stdin.take() {
+                tokio::spawn(async move {
+                    while let Some(chunk) = rx.recv().await {
+                        if child_in.write_all(&chunk).await.is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+        }
 
         let mut stdout_pipe = child.stdout.take().ok_or_else(|| {
             ShadowError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to capture stdout"))

@@ -4,7 +4,8 @@ use shadow_cli::runner::{AgentRunner, SandboxContext};
 use shadow_core::Result;
 use shadow_cow::PatchGenerator;
 use shadow_vmm::{
-    ChromiumSandbox, ChromiumSandboxConfig, CdpSession, VirtualDisplayConfig, VirtualDisplayServer,
+    ChromiumSandbox, ChromiumSandboxConfig, CdpSession, SwarmOrchestrator, VirtualDisplayConfig,
+    VirtualDisplayServer,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -18,6 +19,7 @@ pub struct McpHandler {
     pub cdp_session: Arc<CdpSession>,
     pub virtual_display: Arc<Mutex<VirtualDisplayServer>>,
     pub chromium_sandbox: Arc<Mutex<ChromiumSandbox>>,
+    pub swarm_orchestrator: Arc<Mutex<SwarmOrchestrator>>,
 }
 
 impl McpHandler {
@@ -35,12 +37,16 @@ impl McpHandler {
         // Initialize raw CDP direct session over AF_VSOCK bridge
         let cdp = CdpSession::new(2, 9222);
 
+        // Initialize Swarm Orchestrator for concurrent worker MicroVMs
+        let swarm = SwarmOrchestrator::new(workspace_root.clone());
+
         Ok(Self {
             workspace_root,
             sandbox_context: Arc::new(Mutex::new(context)),
             cdp_session: Arc::new(cdp),
             virtual_display: Arc::new(Mutex::new(display_server)),
             chromium_sandbox: Arc::new(Mutex::new(chromium)),
+            swarm_orchestrator: Arc::new(Mutex::new(swarm)),
         })
     }
 
@@ -59,7 +65,7 @@ impl McpHandler {
                         "name": "shadow-mcp",
                         "version": "0.1.0"
                     },
-                    "instructions": "ShadowOS hardware-isolated microVM sandbox with 4-layer OverlayFS CoW protection, sub-100ms instant state rollback, Xvfb virtual display (DISPLAY=:99), and raw CDP browser sandbox."
+                    "instructions": "ShadowOS hardware-isolated microVM sandbox with 4-layer OverlayFS CoW protection, sub-100ms instant state rollback, Xvfb virtual display (DISPLAY=:99), raw CDP browser driving, and parallel worker swarming."
                 });
                 Some(JsonRpcResponse::success(req_id, init_result))
             }
@@ -86,6 +92,9 @@ impl McpHandler {
                     "browser_click" => self.call_browser_click(&arguments),
                     "browser_type" => self.call_browser_type(&arguments),
                     "capture_screenshot" => self.call_capture_screenshot(&arguments),
+                    "swarm_spawn_worker" => self.call_swarm_spawn_worker(&arguments),
+                    "swarm_dispatch_task" => self.call_swarm_dispatch_task(&arguments),
+                    "swarm_collect_results" => self.call_swarm_collect_results(&arguments),
                     unknown => CallToolResult::error(format!("Unknown tool: {}", unknown)),
                 };
 
@@ -244,6 +253,70 @@ impl McpHandler {
                             "type": "boolean",
                             "description": "Whether to capture beyond the current 1920x1080 viewport",
                             "default": false
+                        }
+                    }
+                }),
+            },
+            ToolDefinition {
+                name: "swarm_spawn_worker".to_string(),
+                description: "Spawns a new concurrent worker MicroVM in the swarm with CPU core pinning, memory quotas, and branching CoW isolation.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "worker_id": {
+                            "type": "string",
+                            "description": "Unique identifier for the worker (e.g. worker-lint, worker-test)"
+                        },
+                        "cpu_core": {
+                            "type": "integer",
+                            "description": "Host CPU core affinity to pin this worker to (0..N)"
+                        },
+                        "memory_mb": {
+                            "type": "integer",
+                            "description": "Memory quota in megabytes (defaults to 512, idle < 200MB)",
+                            "default": 512
+                        }
+                    },
+                    "required": ["worker_id"]
+                }),
+            },
+            ToolDefinition {
+                name: "swarm_dispatch_task".to_string(),
+                description: "Dispatches a sandboxed task or command to a specific swarm worker MicroVM instance.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "worker_id": {
+                            "type": "string",
+                            "description": "Target worker instance identifier"
+                        },
+                        "command": {
+                            "type": "string",
+                            "description": "Command or script to execute inside the worker branch"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Command-line arguments"
+                        },
+                        "auto_approve": {
+                            "type": "boolean",
+                            "description": "Automatically inject non-interactive approval flags",
+                            "default": true
+                        }
+                    },
+                    "required": ["worker_id", "command"]
+                }),
+            },
+            ToolDefinition {
+                name: "swarm_collect_results".to_string(),
+                description: "Aggregates execution reports, branching file diffs, and memory metrics across swarm workers, verifying zero cross-worker pollution.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "worker_id": {
+                            "type": "string",
+                            "description": "Optional specific worker ID to filter reports"
                         }
                     }
                 }),
@@ -501,6 +574,95 @@ impl McpHandler {
                 CallToolResult::json(&payload)
             }
             Err(e) => CallToolResult::error(format!("Capture screenshot failed: {}", e)),
+        }
+    }
+
+    fn call_swarm_spawn_worker(&self, args: &Value) -> CallToolResult {
+        let worker_id = match args.get("worker_id").and_then(|w| w.as_str()) {
+            Some(w) => w,
+            None => return CallToolResult::error("Missing required 'worker_id' argument"),
+        };
+
+        let cpu_core = args.get("cpu_core").and_then(|c| c.as_u64()).map(|c| c as usize);
+        let memory_mb = args.get("memory_mb").and_then(|m| m.as_u64());
+
+        let mut swarm = self.swarm_orchestrator.lock().unwrap();
+        match swarm.spawn_worker(worker_id, cpu_core, memory_mb) {
+            Ok(info) => {
+                let payload = json!({
+                    "worker_id": info.worker_id,
+                    "pinned_cpu": info.pinned_cpu,
+                    "memory_quota_mb": info.memory_quota_mb,
+                    "idle_footprint_mb": info.idle_footprint_mb,
+                    "spawn_latency_ms": info.spawn_latency_ms,
+                    "target_met": info.idle_footprint_mb < 200.0,
+                    "upper_dir": info.upper_dir,
+                    "status": "spawned"
+                });
+                CallToolResult::json(&payload)
+            }
+            Err(e) => CallToolResult::error(format!("Failed to spawn swarm worker: {}", e)),
+        }
+    }
+
+    fn call_swarm_dispatch_task(&self, args: &Value) -> CallToolResult {
+        let worker_id = match args.get("worker_id").and_then(|w| w.as_str()) {
+            Some(w) => w,
+            None => return CallToolResult::error("Missing required 'worker_id' argument"),
+        };
+
+        let command = match args.get("command").and_then(|c| c.as_str()) {
+            Some(c) => c,
+            None => return CallToolResult::error("Missing required 'command' argument"),
+        };
+
+        let cmd_args: Vec<String> = args
+            .get("args")
+            .and_then(|a| a.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut swarm = self.swarm_orchestrator.lock().unwrap();
+        match swarm.dispatch_task(worker_id, command, &cmd_args) {
+            Ok(res) => {
+                let payload = json!({
+                    "task_id": res.task_id,
+                    "worker_id": res.worker_id,
+                    "command": res.command,
+                    "exit_code": res.exit_code,
+                    "stdout": res.stdout,
+                    "stderr": res.stderr,
+                    "duration_ms": res.duration_ms,
+                    "files_modified": res.files_modified,
+                    "current_memory_mb": res.current_memory_mb
+                });
+                CallToolResult::json(&payload)
+            }
+            Err(e) => CallToolResult::error(format!("Failed to dispatch task to worker: {}", e)),
+        }
+    }
+
+    fn call_swarm_collect_results(&self, args: &Value) -> CallToolResult {
+        let worker_id = args.get("worker_id").and_then(|w| w.as_str());
+
+        let swarm = self.swarm_orchestrator.lock().unwrap();
+        match swarm.collect_results(worker_id) {
+            Ok(summary) => {
+                let payload = json!({
+                    "active_workers": summary.active_workers,
+                    "total_tasks_completed": summary.total_tasks_completed,
+                    "aggregate_peak_memory_mb": summary.aggregate_peak_memory_mb,
+                    "within_peak_memory_limit": summary.within_peak_memory_limit,
+                    "zero_cross_pollution": summary.zero_cross_pollution,
+                    "worker_reports": summary.worker_reports
+                });
+                CallToolResult::json(&payload)
+            }
+            Err(e) => CallToolResult::error(format!("Failed to collect swarm results: {}", e)),
         }
     }
 }

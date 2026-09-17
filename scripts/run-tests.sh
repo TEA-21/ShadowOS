@@ -8,47 +8,53 @@ echo "=========================================================="
 echo " Running ShadowOS Test Suites & NFR Benchmarks"
 echo "=========================================================="
 
-echo "[1/14] Running shadow-core unit & protocol integration tests..."
+echo "[1/16] Running shadow-core unit & protocol integration tests..."
 cargo test -p shadow-core --test protocol_test -- --nocapture
 
-echo "[2/14] Running shadow-core NFR framing benchmarks..."
+echo "[2/16] Running shadow-core NFR framing benchmarks..."
 cargo test -p shadow-core --test benchmark_nfr -- --nocapture
 
-echo "[3/14] Running shadow-vmm lifecycle state tests..."
+echo "[3/16] Running shadow-vmm lifecycle state tests..."
 cargo test -p shadow-vmm --test vmm_lifecycle_tests -- --nocapture
 
-echo "[4/14] Running shadow-vsock channel queue tests..."
+echo "[4/16] Running shadow-vsock channel queue tests..."
 cargo test -p shadow-vsock --test vsock_tests -- --nocapture
 
-echo "[5/14] Running shadow-vsock streaming bash execution tests..."
+echo "[5/16] Running shadow-vsock streaming bash execution tests..."
 cargo test -p shadow-vsock --test streaming_exec_tests -- --nocapture
 
-echo "[6/14] Running shadow-vmm virtio-fs & DAX I/O tests..."
+echo "[6/16] Running shadow-vmm virtio-fs & DAX I/O tests..."
 cargo test -p shadow-vmm --test virtiofs_tests -- --nocapture
 
-echo "[7/14] Running shadow-vmm cold boot provisioning benchmarks..."
+echo "[7/16] Running shadow-vmm cold boot provisioning benchmarks..."
 cargo test -p shadow-vmm --test cold_boot_benchmarks -- --nocapture
 
-echo "[8/14] Running shadow-cow ephemeral isolation & zero pollution tests..."
+echo "[8/16] Running shadow-cow ephemeral isolation & zero pollution tests..."
 cargo test -p shadow-cow --test cow_isolation_tests -- --nocapture
 
-echo "[9/14] Running shadow-snapshot state rollback & checkpoint tests..."
+echo "[9/16] Running shadow-snapshot state rollback & checkpoint tests..."
 cargo test -p shadow-snapshot --test snapshot_rollback_tests -- --nocapture
 
-echo "[10/14] Running shadow-cli harness & auto-approve execution tests..."
+echo "[10/16] Running shadow-cli harness & auto-approve execution tests..."
 cargo test -p shadow-cli --test cli_execution_tests -- --nocapture
 
-echo "[11/14] Running shadow-tui diff inspector & keyboard simulation tests..."
+echo "[11/16] Running shadow-tui diff inspector & keyboard simulation tests..."
 cargo test -p shadow-tui --test tui_interaction_tests -- --nocapture
 
-echo "[12/14] Running shadow-mcp Model Context Protocol (MCP) server tests..."
+echo "[12/16] Running shadow-mcp Model Context Protocol (MCP) server tests..."
 cargo test -p shadow-mcp --test mcp_protocol_tests -- --nocapture
 
-echo "[13/14] Running shadow-vmm headless virtual display & raw CDP tests..."
+echo "[13/16] Running shadow-vmm headless virtual display & raw CDP tests..."
 cargo test -p shadow-vmm --test display_cdp_tests -- --nocapture
 
-echo "[14/14] Running shadow-mcp visual browser tools tests..."
+echo "[14/16] Running shadow-mcp visual browser tools tests..."
 cargo test -p shadow-mcp --test mcp_browser_tests -- --nocapture
+
+echo "[15/16] Running shadow-vmm swarm orchestrator & virtio-balloon tests..."
+cargo test -p shadow-vmm --test swarm_orchestration_tests -- --nocapture
+
+echo "[16/16] Running shadow-mcp swarm primitives tests..."
+cargo test -p shadow-mcp --test mcp_swarm_tests -- --nocapture
 
 echo "\n--- Cross-Platform Verification & NFR Benchmarks ---"
 python3 scripts/verify_phase1_protocol.py
@@ -63,6 +69,7 @@ python3 scripts/verify_milestone2_4_tui.py
 python3 scripts/benchmark_phase2_gate.py
 python3 scripts/verify_milestone3_1_mcp.py
 python3 scripts/verify_milestone3_2_display.py
+python3 scripts/benchmark_milestone3_3_swarm.py
 
 echo "=========================================================="
 echo " [OK] All ShadowOS Test Suites & Gate Validations Passed!"

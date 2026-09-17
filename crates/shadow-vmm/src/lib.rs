@@ -1,17 +1,24 @@
+pub mod balloon;
 pub mod cdp;
 pub mod dax_benchmark;
 pub mod display;
 pub mod firecracker;
 pub mod libkrun;
 pub mod mock;
+pub mod swarm;
 pub mod traits;
 pub mod virtiofs;
 
+pub use balloon::{BalloonMetrics, VirtioBalloonConfig, VirtioBalloonDriver};
 pub use cdp::{CdpClient, CdpError, CdpRequest, CdpResponse, CdpSession, DomNode, PageNavigationResult, ScreenshotResult};
 pub use dax_benchmark::{DaxIoBenchmark, IoBenchmarkResult};
 pub use display::{ChromiumSandbox, ChromiumSandboxConfig, VirtualDisplayConfig, VirtualDisplayServer};
 pub use firecracker::FirecrackerDriver;
 pub use libkrun::LibkrunDriver;
 pub use mock::{MockHypervisor, MockVmState, RecordedCall};
+pub use swarm::{
+    SwarmOrchestrator, SwarmSummary, TaskResult, WorkerConfig, WorkerInfo, WorkerInstance,
+    WorkerReport, WorkerStatus,
+};
 pub use traits::VMMDriver;
 pub use virtiofs::VirtiofsDaemon;

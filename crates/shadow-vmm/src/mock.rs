@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use async_trait::async_trait;
 use serde_json::Value;
-use shadow_core::{Result, ShadowError};
+use shadow_core::{Result, ShadowError, VmConfig};
+use crate::traits::VMMDriver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MockVmState {
@@ -160,5 +163,76 @@ impl MockHypervisor {
             .iter()
             .filter(|c| c.endpoint == endpoint)
             .count()
+    }
+}
+
+#[async_trait]
+impl VMMDriver for MockHypervisor {
+    async fn init(&mut self, config: &VmConfig) -> Result<()> {
+        let _ = self.handle_request("PUT", "/machine-config", Some(serde_json::json!({
+            "mem_size_mib": config.resources.memory_size_mib,
+            "vcpu_count": config.resources.vcpu_count,
+        })))?;
+        Ok(())
+    }
+
+    async fn start(&mut self) -> Result<()> {
+        let _ = self.handle_request("PUT", "/actions", Some(serde_json::json!({
+            "action_type": "InstanceStart"
+        })))?;
+        Ok(())
+    }
+
+    async fn pause(&mut self) -> Result<()> {
+        let _ = self.handle_request("PATCH", "/vm", Some(serde_json::json!({
+            "state": "Paused"
+        })))?;
+        Ok(())
+    }
+
+    async fn resume(&mut self) -> Result<()> {
+        let _ = self.handle_request("PATCH", "/vm", Some(serde_json::json!({
+            "state": "Resumed"
+        })))?;
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<()> {
+        let _ = self.handle_request("PUT", "/actions", Some(serde_json::json!({
+            "action_type": "SendCtrlAltDel"
+        })))?;
+        Ok(())
+    }
+
+    async fn is_alive(&self) -> Result<bool> {
+        let state = self.get_state();
+        Ok(state == MockVmState::Running || state == MockVmState::Paused)
+    }
+
+    async fn snapshot(&self, mem_file_path: &Path, state_file_path: &Path) -> Result<()> {
+        let _ = self.handle_request("PUT", "/snapshot/create", Some(serde_json::json!({
+            "snapshot_type": "Diff",
+            "snapshot_path": state_file_path.to_string_lossy(),
+            "mem_file_path": mem_file_path.to_string_lossy(),
+        })))?;
+        if let Some(parent) = mem_file_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(mem_file_path, b"MOCK_DIFF_RAM_PAGES_DEV_SHM");
+        let _ = std::fs::write(state_file_path, b"MOCK_FIRECRACKER_DEVICE_STATE");
+        Ok(())
+    }
+
+    async fn restore(&self, mem_file_path: &Path, state_file_path: &Path) -> Result<()> {
+        let _ = self.handle_request("PUT", "/snapshot/load", Some(serde_json::json!({
+            "snapshot_path": state_file_path.to_string_lossy(),
+            "mem_backend": {
+                "backend_path": mem_file_path.to_string_lossy(),
+                "backend_type": "File"
+            },
+            "enable_diff_snapshots": true,
+            "resume_vm": true
+        })))?;
+        Ok(())
     }
 }

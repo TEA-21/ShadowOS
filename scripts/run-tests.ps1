@@ -28,8 +28,11 @@ cargo test -p shadow-vmm --test virtiofs_tests -- --nocapture
 Write-Host "`n[7/8] Running shadow-vmm cold boot provisioning benchmarks..." -ForegroundColor Yellow
 cargo test -p shadow-vmm --test cold_boot_benchmarks -- --nocapture
 
-Write-Host "`n[8/8] Running shadow-cow ephemeral isolation & zero pollution tests..." -ForegroundColor Yellow
+Write-Host "`n[8/9] Running shadow-cow ephemeral isolation & zero pollution tests..." -ForegroundColor Yellow
 cargo test -p shadow-cow --test cow_isolation_tests -- --nocapture
+
+Write-Host "`n[9/9] Running shadow-snapshot state rollback & checkpoint tests..." -ForegroundColor Yellow
+cargo test -p shadow-snapshot --test snapshot_rollback_tests -- --nocapture
 
 Write-Host "`n--- Cross-Platform Verification & NFR Benchmarks ---" -ForegroundColor Cyan
 python scripts/verify_phase1_protocol.py
@@ -38,6 +41,7 @@ python scripts/benchmark_virtiofs_io.py
 python scripts/benchmark_vsock_streaming.py
 python scripts/benchmark_phase1_gate.py
 python scripts/verify_milestone2_1_cow.py
+python scripts/benchmark_milestone2_2_rollback.py
 
 Write-Host "`n==========================================================" -ForegroundColor Green
 Write-Host " [OK] All ShadowOS Test Suites & Gate Validations Passed!" -ForegroundColor Green

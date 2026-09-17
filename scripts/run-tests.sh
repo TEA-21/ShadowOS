@@ -29,8 +29,11 @@ cargo test -p shadow-vmm --test virtiofs_tests -- --nocapture
 echo "[7/8] Running shadow-vmm cold boot provisioning benchmarks..."
 cargo test -p shadow-vmm --test cold_boot_benchmarks -- --nocapture
 
-echo "[8/8] Running shadow-cow ephemeral isolation & zero pollution tests..."
+echo "[8/9] Running shadow-cow ephemeral isolation & zero pollution tests..."
 cargo test -p shadow-cow --test cow_isolation_tests -- --nocapture
+
+echo "[9/9] Running shadow-snapshot state rollback & checkpoint tests..."
+cargo test -p shadow-snapshot --test snapshot_rollback_tests -- --nocapture
 
 echo "\n--- Cross-Platform Verification & NFR Benchmarks ---"
 python3 scripts/verify_phase1_protocol.py
@@ -39,6 +42,7 @@ python3 scripts/benchmark_virtiofs_io.py
 python3 scripts/benchmark_vsock_streaming.py
 python3 scripts/benchmark_phase1_gate.py
 python3 scripts/verify_milestone2_1_cow.py
+python3 scripts/benchmark_milestone2_2_rollback.py
 
 echo "=========================================================="
 echo " [OK] All ShadowOS Test Suites & Gate Validations Passed!"

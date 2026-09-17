@@ -134,14 +134,16 @@ impl VMMDriver for FirecrackerDriver {
     }
 
     async fn snapshot(&self, mem_file_path: &Path, state_file_path: &Path) -> Result<()> {
-        self.pause().await?;
+        let pause_payload = serde_json::json!({ "state": "Paused" });
+        self.send_api_request("PATCH", "/vm", Some(pause_payload)).await?;
         let snap_payload = serde_json::json!({
             "snapshot_type": "Diff",
             "snapshot_path": state_file_path.to_string_lossy(),
             "mem_file_path": mem_file_path.to_string_lossy(),
         });
         self.send_api_request("PUT", "/snapshot/create", Some(snap_payload)).await?;
-        self.resume().await?;
+        let resume_payload = serde_json::json!({ "state": "Resumed" });
+        self.send_api_request("PATCH", "/vm", Some(resume_payload)).await?;
         tracing::info!("Snapshot saved to: {:?}", mem_file_path);
         Ok(())
     }

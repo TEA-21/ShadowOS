@@ -9,6 +9,7 @@ members = [
     "crates/shadow-cow",
     "crates/shadow-snapshot",
     "crates/shadow-tui",
+    "crates/shadow-mcp",
 ]
 
 [workspace.package]

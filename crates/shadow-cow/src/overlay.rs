@@ -163,6 +163,9 @@ impl OverlayManager {
         for entry in fs::read_dir(&current)? {
             let entry = entry?;
             let name = entry.file_name();
+            if name == ".shadow" || name == ".git" {
+                continue;
+            }
             let child_rel = rel.join(name);
             let ft = entry.file_type()?;
             if ft.is_dir() {

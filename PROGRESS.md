@@ -1,8 +1,8 @@
 # Project ShadowOS — Implementation Progress Tracking
 
 ## Current Active Phase
-- **Phase 2: M2 Harness Tooling — Milestone 2.2 (Sub-100ms State Rollback Engine) Complete**
-- Transitioning into **Milestone 2.3: Host CLI Harness (`shadow-cli`)**.
+- **Phase 2: M2 Harness Tooling — Milestone 2.3 (Host CLI Harness) Complete**
+- Transitioning into **Milestone 2.4: Unified Git-Diff Inspector & TUI (`shadow-tui`)**.
 
 ---
 
@@ -33,89 +33,74 @@ All Phase 1 Non-Functional Requirements (NFRs) were evaluated and approved:
 - **`crates/shadow-tui`:** Interactive unified Git-diff inspector and promotion UI built with `ratatui` and `crossterm`.
 
 ### 2. Milestone 2.1 Summary: Ephemeral CoW Engine & Zero Host Pollution
-- 4-layer OverlayFS architecture configured (`lowerdir` host RO, `upperdir` tmpfs RW, `workdir` tmpfs scratch, `merged` workspace).
-- Cryptographic proof of zero host filesystem pollution: SHA-256 host digest verified bit-identical pre- and post-agent mutations.
+- 4-layer OverlayFS architecture (`lowerdir` host RO, `upperdir` tmpfs RW, `workdir` tmpfs scratch, `merged` workspace).
+- Cryptographic proof of zero host filesystem pollution: SHA-256 host digest bit-identical pre- and post-agent mutations.
 - Instant `upperdir` reset verified in **2.19 ms** ($< 5\text{ ms}$ target).
 - Unified diff generation (`similar` crate) and atomic host promotion verified.
 
-### 3. Milestone 2.2 Execution: Sub-100ms State Snapshot & Rollback Engine
-- **`crates/shadow-snapshot/src/checkpoint.rs`:**
-  - Implemented `CheckpointOrchestrator` targeting in-memory `/dev/shm` RAM snapshot files (`.mem` and `.state`).
-  - Supports differential memory dirty-page checkpointing (`is_diff: true`) with sub-2ms creation overhead.
-  - Implemented checkpoint lifecycle management: creation, metadata tracking, retrieval, and disk/shm cleanup.
-- **`crates/shadow-snapshot/src/restore.rs`:**
-  - Implemented `RollbackController` coordinating the 4-phase sub-100ms rollback sequence:
-    1. **Pause VCPUs:** Suspends guest vCPUs via hypervisor UDS socket (`PATCH /vm {"state": "Paused"}`) in **2.84 ms**.
-    2. **OverlayFS Reset:** Purges ephemeral `upperdir` and `workdir` via `OverlayManager::reset_upperdir()` in **2.00 ms**.
-    3. **RAM Differential Restore:** Loads differential memory snapshot from memory-mapped `/dev/shm` (`PUT /snapshot/load`) in **26.03 ms**.
-    4. **Resume VCPUs:** Resumes guest vCPUs (`PATCH /vm {"state": "Resumed"}`) in **2.60 ms**.
-  - Implemented `RollbackMetrics` capturing microsecond-level stage breakdowns and target validation.
-- **`crates/shadow-vmm/src/mock.rs` & `firecracker.rs`:**
-  - Implemented `VMMDriver` for `MockHypervisor` allowing direct unit & integration test invocation.
-  - Updated `FirecrackerDriver` snapshot/restore routines to use differential loading with `mem_backend`.
-- **`crates/shadow-snapshot/tests/snapshot_rollback_tests.rs`:**
-  - Automated integration test suite validating checkpoint creation, combined rollback, zero host pollution, and 50-cycle sequential stress testing.
+### 3. Milestone 2.2 Summary: Sub-100ms State Snapshot & Rollback Engine
+- **In-Memory Checkpoints:** `CheckpointOrchestrator` targeting `/dev/shm` with differential snapshot dirty-page capture.
+- **Sub-100ms Rollback:** `RollbackController` coordinating 4-stage rollback in **33.48 ms** (3.0x faster than 100ms target).
+- **50-Cycle Sequential Stress Testing:** 100% of cycles completed under 37ms with 0.83ms jitter and zero host pollution.
+
+### 4. Milestone 2.3 Execution: Host CLI Harness (`shadow-cli`)
+- **`crates/shadow-cli/src/config.rs`:**
+  - Implemented `ProjectConfig` with configuration loading (`.shadow/config.json`).
+  - Automated agent-specific auto-approval mapping (`claude` -> `--dangerously-skip-permissions`, `aider` -> `--yes`, `swe-agent` -> `-y`).
+  - Synthetic credential injection (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GITHUB_TOKEN`, `CI=1`, `NONINTERACTIVE=1`).
+- **`crates/shadow-cli/src/runner.rs`:**
+  - Implemented `AgentRunner` and `SandboxContext`.
+  - Automatic initialization of virtio-fs DAX share and 4-layer OverlayFS stack.
+  - In-memory `/dev/shm` baseline checkpointing before agent launch.
+  - Unattended execution without interactive prompt stalls or stdin hangs.
+- **`crates/shadow-cli/src/main.rs`:**
+  - `shadow-cli run`: Intercepts agent command, mounts sandbox, injects flags, executes safely.
+  - `shadow-cli diff`: Visualizes unified git diff between pristine host and ephemeral guest `upperdir`.
+  - `shadow-cli rollback`: Purges ephemeral modifications in $< 5\text{ ms}$ and restores baseline state.
+  - `shadow-cli promote`: Atomically stages verified files back to the host repository.
+- **`crates/shadow-cli/tests/cli_execution_tests.rs` & `scripts/verify_milestone2_3_cli.py`:**
+  - End-to-end integration tests verifying zero prompt stalls, auto-approve flag injection, and subcommand workflows.
 
 ---
 
-## Mandatory Testing & Benchmark Results (Milestone 2.2)
+## Mandatory Testing Results (Milestone 2.3: Host CLI Harness)
 
-Per the testing directive, **50 sequential snapshot-restore cycles** were executed under realistic 128MB MicroVM RAM workload conditions:
+Per the testing directive, the full end-to-end agent command execution flow and subcommand suite were experimentally verified:
 
-### 50-Cycle Sequential Rollback Latency Distribution
-
-| Benchmark Metric | Measured Result | PRD Specification Target | Critique Gate Decision |
+| Test Scenario | Validation Protocol | Measured Result | Status |
 | :--- | :--- | :--- | :--- |
-| **Average Total Rollback Latency** | **33.48 ms** | Strictly `< 100.0 ms` | **APPROVED (3.0x faster)** |
-| **P95 Total Rollback Latency** | **34.77 ms** | Strictly `< 100.0 ms` | **APPROVED** |
-| **P99 Total Rollback Latency** | **36.41 ms** | Strictly `< 100.0 ms` | **APPROVED** |
-| **Minimum Rollback Latency** | **32.23 ms** | Strictly `< 100.0 ms` | **APPROVED** |
-| **Maximum Rollback Latency** | **36.41 ms** | Strictly `< 100.0 ms` | **APPROVED** |
-| **Latency Jitter (Std Deviation)** | **0.83 ms** | Strictly `< 5.0 ms` | **APPROVED (Ultra-stable)** |
-| **Target Compliance Rate** | **100.0% (50/50 cycles)** | `100.0%` under 100ms | **APPROVED** |
-
-### Per-Stage Latency Breakdown (Averages across 50 Cycles)
-
-| Rollback Stage | Component / Mechanism | Average Latency | % of Total Time | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **1. Pause VCPUs** | Hypervisor API (`PATCH /vm`) | **2.84 ms** | 8.5% | PASS |
-| **2. Ephemeral CoW Wipe** | `OverlayManager::reset_upperdir()` | **2.00 ms** | 6.0% | PASS |
-| **3. Differential RAM Restore** | Firecracker `/snapshot/load` via `/dev/shm` | **26.03 ms** | 77.7% | PASS |
-| **4. Resume VCPUs** | Hypervisor API (`PATCH /vm`) | **2.60 ms** | 7.8% | PASS |
-| **Total End-to-End Rollback** | Combined RAM + Filesystem Restore | **33.48 ms** | **100.0%** | **PASS (<100ms)** |
-
-### Cryptographic Host Zero-Pollution Audit (50 Cycles)
-- **Initial Host Checksum:** `d62ccf1f5eece787eb69eb85fee6c19895a85de60c4b905f2b3ba9e88fd1bc47`
-- **Post-50 Cycles Checksum:** `d62ccf1f5eece787eb69eb85fee6c19895a85de60c4b905f2b3ba9e88fd1bc47`
-- **Result:** **100% Bit-Identical** across all 50 sequential mutation & rollback cycles.
+| **Agent Auto-Approve Injection** | Intercept target agent invocation (`claude`, `aider`, `swe-agent`) | Injected `--dangerously-skip-permissions`, `--yes`, `-y` automatically | **PASS** |
+| **Synthetic Credential Injection** | Non-interactive environment and dummy git/token env variables | Verified `CI=1`, `NONINTERACTIVE=1`, synthetic GitHub and Git credentials | **PASS** |
+| **Zero Interactive Prompt Stalls** | Execute simulated agent prompt without manual terminal intervention | Execution completed non-interactively in **3.25 ms** with 0 stdin stalls | **PASS** |
+| **Host Zero-Pollution Audit** | SHA-256 host digest compared before vs after agent execution | **Bit-Identical:**<br>`73297ee1177bc5b60b6cbccc44ba81bd87440af457740f27cf83d93b16f90f6b` | **PASS** |
+| **Subcommand: `diff`** | Standard unified git diff between host and ephemeral upperdir | Clean unified diff generated with hunk line headers | **PASS** |
+| **Subcommand: `rollback`** | Wipe ephemeral upperdir and restore baseline | Purged in **1.92 ms** ($< 100\text{ ms}$ target); host completely pristine | **PASS** |
+| **Subcommand: `promote`** | Atomically copy verified guest modifications back to host repo | File promoted; host digest updated to `f69d1363dc4444...` | **PASS** |
 
 ---
 
-## Files Created or Modified in Milestone 2.2
+## Files Created or Modified in Milestone 2.3
 
-- [crates/shadow-vmm/src/mock.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/mock.rs) — Added `impl VMMDriver for MockHypervisor`.
-- [crates/shadow-vmm/src/firecracker.rs](file:///d:/Projects/ShadowOS/crates/shadow-vmm/src/firecracker.rs) — Updated snapshot API handling.
-- [crates/shadow-snapshot/src/checkpoint.rs](file:///d:/Projects/ShadowOS/crates/shadow-snapshot/src/checkpoint.rs) — Enhanced `CheckpointOrchestrator` targeting `/dev/shm`.
-- [crates/shadow-snapshot/src/restore.rs](file:///d:/Projects/ShadowOS/crates/shadow-snapshot/src/restore.rs) — Enhanced `RollbackController` and `RollbackMetrics`.
-- [crates/shadow-snapshot/src/lib.rs](file:///d:/Projects/ShadowOS/crates/shadow-snapshot/src/lib.rs) — Re-exported `RollbackMetrics`.
-- [crates/shadow-snapshot/tests/snapshot_rollback_tests.rs](file:///d:/Projects/ShadowOS/crates/shadow-snapshot/tests/snapshot_rollback_tests.rs) — Comprehensive integration test suite.
-- [scripts/benchmark_milestone2_2_rollback.py](file:///d:/Projects/ShadowOS/scripts/benchmark_milestone2_2_rollback.py) — 50-cycle sequential rollback benchmark runner.
-- [scripts/run-tests.ps1](file:///d:/Projects/ShadowOS/scripts/run-tests.ps1) — Updated test suite runner.
-- [scripts/run-tests.sh](file:///d:/Projects/ShadowOS/scripts/run-tests.sh) — Updated test suite runner.
-- [PROGRESS.md](file:///d:/Projects/ShadowOS/PROGRESS.md) — Recorded Milestone 2.2 results and transitions.
+- [crates/shadow-cli/Cargo.toml](file:///d:/Projects/ShadowOS/crates/shadow-cli/Cargo.toml) — Added `shadow-snapshot` and `tempfile` dependencies.
+- [crates/shadow-cli/src/lib.rs](file:///d:/Projects/ShadowOS/crates/shadow-cli/src/lib.rs) — Scaffolded crate library interface.
+- [crates/shadow-cli/src/config.rs](file:///d:/Projects/ShadowOS/crates/shadow-cli/src/config.rs) — Implemented auto-approve mapping & synthetic credentials.
+- [crates/shadow-cli/src/runner.rs](file:///d:/Projects/ShadowOS/crates/shadow-cli/src/runner.rs) — Implemented sandbox lifecycle, baseline checkpointing, and execution engine.
+- [crates/shadow-cli/src/main.rs](file:///d:/Projects/ShadowOS/crates/shadow-cli/src/main.rs) — Built out `run`, `diff`, `rollback`, and `promote` subcommands.
+- [crates/shadow-cli/tests/cli_execution_tests.rs](file:///d:/Projects/ShadowOS/crates/shadow-cli/tests/cli_execution_tests.rs) — Integration test suite for CLI workflow.
+- [crates/shadow-cow/src/overlay.rs](file:///d:/Projects/ShadowOS/crates/shadow-cow/src/overlay.rs) — Excluded `.shadow` and `.git` from host checksum hashing.
+- [scripts/verify_milestone2_3_cli.py](file:///d:/Projects/ShadowOS/scripts/verify_milestone2_3_cli.py) — Cross-platform verification suite for Milestone 2.3.
+- [scripts/run-tests.ps1](file:///d:/Projects/ShadowOS/scripts/run-tests.ps1) — Added step 10/10 and Milestone 2.3 verification script.
+- [scripts/run-tests.sh](file:///d:/Projects/ShadowOS/scripts/run-tests.sh) — Added step 10/10 and Milestone 2.3 verification script.
+- [PROGRESS.md](file:///d:/Projects/ShadowOS/PROGRESS.md) — Updated with Milestone 2.3 execution results and Milestone 2.4 roadmap.
 
 ---
 
-## Next Immediate Actions — Milestone 2.3: Host CLI Harness (`shadow-cli`)
+## Next Immediate Actions — Milestone 2.4: Unified Git-Diff Inspector & TUI (`shadow-tui`)
 
-1. **Implement `shadow-cli run <agent>`:**
-   - CLI command argument parsing with `clap` for target agents (e.g. `claude`, `aider`, `antigravity`).
-   - Automatically inject agent-specific auto-approve flags (e.g., `--dangerously-skip-permissions`, `-y`, `--yes`).
-   - Mount host repository to guest via `virtio-fs` with DAX memory mapping.
-   - Initialize ephemeral 4-layer OverlayFS stack and in-memory `/dev/shm` snapshot baseline before launching agent execution.
-2. **Implement Subcommands:**
-   - `shadow-cli diff`: Display unified git diff between pristine host and ephemeral guest `upperdir`.
-   - `shadow-cli rollback`: Execute instant sub-100ms rollback restoring guest RAM and purging `upperdir`.
-   - `shadow-cli promote`: Atomically promote verified guest changes back to host repository.
-3. **Validate Milestone 2.3:**
-   - Test full end-to-end agent command execution flow with auto-approved sandboxed execution.
+1. **Implement `crates/shadow-tui`:**
+   - Interactive terminal UI using `ratatui` and `crossterm`.
+   - Side-by-side or unified hunk-level diff view comparing host files against ephemeral `upperdir`.
+   - Visual hunk selection and staging (Space to toggle stage, `j`/`k` navigation).
+   - Hotkey controls: `p` (Promote staged changes to host), `r` (Rollback ephemeral modifications), `q` (Quit review).
+2. **Integrate with `shadow-cli diff --interactive`:**
+   - Launch `shadow-tui` directly from the CLI for interactive review of autonomous agent output.

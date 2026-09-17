@@ -45,6 +45,10 @@ enum Commands {
         /// Path to target project repository
         #[arg(short, long, default_value = ".")]
         workspace: PathBuf,
+
+        /// Launch the interactive ratatui diff inspector TUI
+        #[arg(short, long)]
+        interactive: bool,
     },
     /// Instantly roll back guest memory and ephemeral storage state (<100ms)
     Rollback {
@@ -148,7 +152,10 @@ async fn main() -> anyhow::Result<()> {
             println!("  - Accept changes:  shadow-cli promote");
         }
 
-        Commands::Diff { workspace } => {
+        Commands::Diff {
+            workspace,
+            interactive,
+        } => {
             println!("============================================================");
             println!(" ShadowOS Unified Git-Diff Review");
             println!("============================================================");
@@ -158,6 +165,16 @@ async fn main() -> anyhow::Result<()> {
             if modified_files.is_empty() {
                 println!("[*] No ephemeral modifications detected in sandbox upperdir.");
                 println!("    Host repository is completely untouched.");
+                return Ok(());
+            }
+
+            if interactive {
+                println!("[*] Launching ShadowOS Interactive TUI Diff Inspector...");
+                shadow_tui::run_interactive_tui(
+                    &context.host_workspace,
+                    &context.upper_dir,
+                    &context.overlay_manager,
+                )?;
                 return Ok(());
             }
 

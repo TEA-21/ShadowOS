@@ -16,6 +16,7 @@ shadow-vmm = { path = "../shadow-vmm" }
 shadow-vsock = { path = "../shadow-vsock" }
 shadow-cow = { path = "../shadow-cow" }
 shadow-snapshot = { path = "../shadow-snapshot" }
+shadow-tui = { path = "../shadow-tui" }
 tempfile.workspace = true
 tokio.workspace = true
 clap.workspace = true

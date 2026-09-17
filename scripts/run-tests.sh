@@ -35,8 +35,11 @@ cargo test -p shadow-cow --test cow_isolation_tests -- --nocapture
 echo "[9/10] Running shadow-snapshot state rollback & checkpoint tests..."
 cargo test -p shadow-snapshot --test snapshot_rollback_tests -- --nocapture
 
-echo "[10/10] Running shadow-cli harness & auto-approve execution tests..."
+echo "[10/11] Running shadow-cli harness & auto-approve execution tests..."
 cargo test -p shadow-cli --test cli_execution_tests -- --nocapture
+
+echo "[11/11] Running shadow-tui diff inspector & keyboard simulation tests..."
+cargo test -p shadow-tui --test tui_interaction_tests -- --nocapture
 
 echo "\n--- Cross-Platform Verification & NFR Benchmarks ---"
 python3 scripts/verify_phase1_protocol.py
@@ -47,6 +50,8 @@ python3 scripts/benchmark_phase1_gate.py
 python3 scripts/verify_milestone2_1_cow.py
 python3 scripts/benchmark_milestone2_2_rollback.py
 python3 scripts/verify_milestone2_3_cli.py
+python3 scripts/verify_milestone2_4_tui.py
+python3 scripts/benchmark_phase2_gate.py
 
 echo "=========================================================="
 echo " [OK] All ShadowOS Test Suites & Gate Validations Passed!"

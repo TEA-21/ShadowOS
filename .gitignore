@@ -4,3 +4,5 @@ Cargo.lock
 *.log
 .DS_Store
 Thumbs.db
+dashboard/node_modules/
+dashboard/dist/

@@ -55,6 +55,7 @@ impl OverlayConfig {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct OverlayManager {
     pub config: OverlayConfig,
 }

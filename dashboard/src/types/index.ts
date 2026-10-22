@@ -105,3 +105,16 @@ export interface AgentNote {
 }
 
 export type ActiveTab = 'sandboxes' | 'snapshots' | 'mcp-console';
+
+export type BackendConnectionStatus = 'connected' | 'connecting' | 'offline';
+
+export interface SystemInfo {
+  hostOs: string;
+  hypervisorDriver: string;
+  kvmAvailable: boolean;
+  workspaceRoot: string;
+  uptimeSeconds: number;
+  aggregateRamLimitMb: number;
+  daxEnabled: boolean;
+  protocolVersion: string;
+}

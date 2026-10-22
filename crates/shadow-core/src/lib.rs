@@ -7,4 +7,5 @@ pub use config::{
     VmConfig,
 };
 pub use error::{Result, ShadowError};
+pub type Error = ShadowError;
 pub use protocol::{CommandRequest, ExitNotification, MessageType, ShadowFrame, StreamId};

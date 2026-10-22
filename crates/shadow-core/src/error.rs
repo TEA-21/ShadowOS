@@ -28,6 +28,9 @@ pub enum ShadowError {
 
     #[error("Execution failed with exit code: {0}")]
     ExecutionFailed(i32),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 pub type Result<T> = std::result::Result<T, ShadowError>;

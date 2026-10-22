@@ -184,6 +184,13 @@ export const SandboxManager: React.FC<SandboxManagerProps> = ({
                             <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">
                               {vm.hypervisor}
                             </span>
+                            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
+                              vm.cowUpperSize === '0.0 MB'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                                : 'bg-amber-50 text-amber-800 border-amber-300 font-semibold'
+                            }`}>
+                              CoW: {vm.cowUpperSize}
+                            </span>
                           </div>
                         </td>
 
@@ -325,7 +332,13 @@ export const SandboxManager: React.FC<SandboxManagerProps> = ({
 
                     <div className="flex items-center justify-between text-xs text-slate-600 pt-1 font-mono">
                       <span>Uptime: {vm.uptime}</span>
-                      <span>{vm.cpuAllocation.vcpus} vCPU ({vm.cpuAllocation.usagePercent}%)</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
+                        vm.cowUpperSize === '0.0 MB'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                      }`}>
+                        CoW: {vm.cowUpperSize}
+                      </span>
                     </div>
                   </div>
                 </div>

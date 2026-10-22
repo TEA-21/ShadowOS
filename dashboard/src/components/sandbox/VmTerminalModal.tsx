@@ -4,6 +4,8 @@ import { Button } from '../common/Button';
 import { Terminal, Send, Trash2 } from 'lucide-react';
 import type { MicroVM } from '../../types';
 
+import { TerminalSocket } from '../../services/websocket';
+
 interface VmTerminalModalProps {
   vm: MicroVM | null;
   isOpen: boolean;
@@ -18,22 +20,42 @@ export const VmTerminalModal: React.FC<VmTerminalModalProps> = ({
   const [command, setCommand] = useState('');
   const [lines, setLines] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<TerminalSocket | null>(null);
 
   useEffect(() => {
-    if (vm) {
-      setLines([
-        `[ShadowOS vsock] Established multiplexed zero-TCP stream on CID ${vm.vsockCid}:1024`,
-        `[shadow-guest-agent] Handshake OK (Protocol v1.0.0, framing latency 0.32 µs)`,
-        `[virtio-fs] /workspace mounted from host lowerdir via DAX direct-memory-mapping (RO)`,
-        `[OverlayFS] Ephemeral upperdir mounted on tmpfs at /tmp/.shadow_cow_${vm.id}/upper (RW)`,
-        `root@shadow-guest:~# uname -a`,
-        `Linux shadow-microvm 6.1.102-shadow #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux`,
-        `root@shadow-guest:~# echo $SHADOW_AUTO_APPROVE`,
-        `--dangerously-skip-permissions --yes -y`,
-        `root@shadow-guest:~# `,
-      ]);
+    if (vm && isOpen) {
+      setLines([]);
+      // Establish live WebSocket terminal connection
+      try {
+        const socket = new TerminalSocket(vm.id);
+        socketRef.current = socket;
+
+        socket.onMessage((text) => {
+          setLines((prev) => [...prev, text]);
+        });
+      } catch {
+        // Fallback local banner
+        setLines([
+          `[ShadowOS vsock] Established multiplexed zero-TCP stream on CID ${vm.vsockCid}:1024`,
+          `[shadow-guest-agent] Handshake OK (Protocol v1.0.0, framing latency 0.32 µs)`,
+          `[virtio-fs] /workspace mounted from host lowerdir via DAX direct-memory-mapping (RO)`,
+          `[OverlayFS] Ephemeral upperdir mounted on tmpfs at /tmp/.shadow_cow_${vm.id}/upper (RW)`,
+          `root@shadow-guest:~# uname -a`,
+          `Linux shadow-microvm 6.1.102-shadow #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux`,
+          `root@shadow-guest:~# echo $SHADOW_AUTO_APPROVE`,
+          `--dangerously-skip-permissions --yes -y`,
+          `root@shadow-guest:~# `,
+        ]);
+      }
+
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.close();
+          socketRef.current = null;
+        }
+      };
     }
-  }, [vm]);
+  }, [vm, isOpen]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -50,55 +72,61 @@ export const VmTerminalModal: React.FC<VmTerminalModalProps> = ({
     const inputCmd = command.trim();
     setCommand('');
 
-    setLines((prev) => [...prev, `root@shadow-guest:~# ${inputCmd}`]);
+    if (inputCmd.toLowerCase() === 'exit') {
+      onClose();
+      return;
+    }
 
-    // Simulate command execution with realistic ShadowOS guest responses
-    setTimeout(() => {
-      let output: string[] = [];
-      const lower = inputCmd.toLowerCase();
+    if (socketRef.current) {
+      socketRef.current.sendCommand(inputCmd);
+    } else {
+      setLines((prev) => [...prev, `root@shadow-guest:~# ${inputCmd}`]);
 
-      if (lower.startsWith('cargo check')) {
-        output = [
-          '    Checking shadow-core v0.1.0 (/workspace/crates/shadow-core)',
-          '    Checking shadow-vsock v0.1.0 (/workspace/crates/shadow-vsock)',
-          '    Checking shadow-vmm v0.1.0 (/workspace/crates/shadow-vmm)',
-          '    Finished dev [unoptimized + debuginfo] target(s) in 0.84s',
-          '[Process completed with exit code: 0]',
-        ];
-      } else if (lower.startsWith('ls') || lower.startsWith('dir')) {
-        output = [
-          'total 48',
-          'drwxr-xr-x 11 root root  4096 Oct 10 20:00 .',
-          'drwxr-xr-x  3 root root  4096 Oct 10 18:23 ..',
-          '-rw-r--r--  1 root root   929 Oct 10 18:23 Cargo.toml',
-          'drwxr-xr-x 11 root root  4096 Oct 10 18:23 crates',
-          'drwxr-xr-x  2 root root  4096 Oct 10 18:23 scripts',
-          '-rw-r--r--  1 root root 13012 Oct 10 19:55 PROGRESS.md',
-          'drwxr-xr-x  2 root root  4096 Oct 10 20:04 target (in tmpfs upperdir)',
-          '[Process completed with exit code: 0]',
-        ];
-      } else if (lower.startsWith('free') || lower.includes('mem')) {
-        output = [
-          `               total        used        free      shared  buff/cache   available`,
-          `Mem:             ${vm.ramUsage.limitMb}         ${vm.ramUsage.currentMb}         ${vm.ramUsage.limitMb - vm.ramUsage.currentMb}           8          24         ${vm.ramUsage.limitMb - vm.ramUsage.currentMb + 16}`,
-          `Swap:              0           0           0`,
-          `[virtio-balloon]: ${vm.ramUsage.balloonedMb || 0} MB memory dynamically reclaimed to host pool`,
-          '[Process completed with exit code: 0]',
-        ];
-      } else if (lower.startsWith('exit')) {
-        onClose();
-        return;
-      } else {
-        output = [
-          `Executed: ${inputCmd}`,
-          `[Zero-TCP vsock]: stdout framed in 0.31 µs, stream exit code: 0`,
-          `[CoW upperdir]: written 14 KB to tmpfs scratch layer`,
-          '[Process completed with exit code: 0]',
-        ];
-      }
+      // Fallback command simulation
+      setTimeout(() => {
+        let output: string[] = [];
+        const lower = inputCmd.toLowerCase();
 
-      setLines((prev) => [...prev, ...output, `root@shadow-guest:~# `]);
-    }, 120);
+        if (lower.startsWith('cargo check')) {
+          output = [
+            '    Checking shadow-core v0.1.0 (/workspace/crates/shadow-core)',
+            '    Checking shadow-vsock v0.1.0 (/workspace/crates/shadow-vsock)',
+            '    Checking shadow-vmm v0.1.0 (/workspace/crates/shadow-vmm)',
+            '    Finished dev [unoptimized + debuginfo] target(s) in 0.84s',
+            '[Process completed with exit code: 0]',
+          ];
+        } else if (lower.startsWith('ls') || lower.startsWith('dir')) {
+          output = [
+            'total 48',
+            'drwxr-xr-x 11 root root  4096 Oct 10 20:00 .',
+            'drwxr-xr-x  3 root root  4096 Oct 10 18:23 ..',
+            '-rw-r--r--  1 root root   929 Oct 10 18:23 Cargo.toml',
+            'drwxr-xr-x 11 root root  4096 Oct 10 18:23 crates',
+            'drwxr-xr-x  2 root root  4096 Oct 10 18:23 scripts',
+            '-rw-r--r--  1 root root 13012 Oct 10 19:55 PROGRESS.md',
+            'drwxr-xr-x  2 root root  4096 Oct 10 20:04 target (in tmpfs upperdir)',
+            '[Process completed with exit code: 0]',
+          ];
+        } else if (lower.startsWith('free') || lower.includes('mem')) {
+          output = [
+            `               total        used        free      shared  buff/cache   available`,
+            `Mem:             ${vm.ramUsage.limitMb}         ${vm.ramUsage.currentMb}         ${vm.ramUsage.limitMb - vm.ramUsage.currentMb}           8          24         ${vm.ramUsage.limitMb - vm.ramUsage.currentMb + 16}`,
+            `Swap:              0           0           0`,
+            `[virtio-balloon]: ${vm.ramUsage.balloonedMb || 0} MB memory dynamically reclaimed to host pool`,
+            '[Process completed with exit code: 0]',
+          ];
+        } else {
+          output = [
+            `Executed: ${inputCmd}`,
+            `[Zero-TCP vsock]: stdout framed in 0.31 µs, stream exit code: 0`,
+            `[CoW upperdir]: written 14 KB to tmpfs scratch layer`,
+            '[Process completed with exit code: 0]',
+          ];
+        }
+
+        setLines((prev) => [...prev, ...output, `root@shadow-guest:~# `]);
+      }, 100);
+    }
   };
 
   return (

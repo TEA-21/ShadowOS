@@ -5,7 +5,7 @@ import {
   Layers
 } from 'lucide-react';
 import { Button } from '../common/Button';
-import type { ActiveTab } from '../../types';
+import type { ActiveTab, BackendConnectionStatus, SystemInfo } from '../../types';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -13,6 +13,8 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   aggregateRamMb: number;
+  connectionStatus?: BackendConnectionStatus;
+  systemInfo?: SystemInfo | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,6 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   searchQuery,
   onSearchChange,
   aggregateRamMb,
+  connectionStatus = 'offline',
+  systemInfo,
 }) => {
   const [workspace, setWorkspace] = useState('production-swarm');
 
@@ -33,6 +37,44 @@ export const Header: React.FC<HeaderProps> = ({
       case 'mcp-console':
         return 'MCP / Swarm Console';
     }
+  };
+
+  const renderConnectionBadge = () => {
+    if (connectionStatus === 'connected') {
+      return (
+        <div 
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md"
+          title={`Connected to shadow-server daemon. Driver: ${systemInfo?.hypervisorDriver || 'Adaptive'}`}
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <span className="hidden sm:inline">Backend:</span>
+          <span>Live Connected</span>
+          {systemInfo?.hypervisorDriver && (
+            <span className="text-[10px] font-mono px-1 py-0.2 bg-emerald-100 text-emerald-800 rounded">
+              {systemInfo.hypervisorDriver}
+            </span>
+          )}
+        </div>
+      );
+    }
+    if (connectionStatus === 'connecting') {
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+          <span>Connecting...</span>
+        </div>
+      );
+    }
+    return (
+      <div 
+        className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200 rounded-md"
+        title="Running in resilient fallback mode with simulated microVM telemetry. Launch 'cargo run -p shadow-server' to connect."
+      >
+        <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+        <span className="hidden sm:inline">Backend:</span>
+        <span>Fallback Mode</span>
+      </div>
+    );
   };
 
   return (
@@ -59,6 +101,11 @@ export const Header: React.FC<HeaderProps> = ({
               <option value="local-dev">local-libkrun-ephemeral</option>
             </select>
           </div>
+        </div>
+
+        {/* Backend Connection Indicator */}
+        <div className="hidden md:block">
+          {renderConnectionBadge()}
         </div>
       </div>
 

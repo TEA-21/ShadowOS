@@ -10,6 +10,7 @@ members = [
     "crates/shadow-snapshot",
     "crates/shadow-tui",
     "crates/shadow-mcp",
+    "crates/shadow-server",
 ]
 
 [workspace.package]
@@ -35,3 +36,6 @@ crossterm = "0.27"
 similar = { version = "2.5", features = ["bytes", "inline"] }
 tempfile = "3.10"
 sha2 = "0.10"
+axum = { version = "0.7", features = ["ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }

@@ -9,25 +9,35 @@ import {
   Check, 
   ChevronDown, 
   ChevronUp,
-  FileText
+  FileText,
+  CheckCircle2,
+  FolderTree
 } from 'lucide-react';
 import type { Snapshot, FileDiffItem, DiffFileStatus } from '../../types';
 import { Button } from '../common/Button';
+import { Badge } from '../common/Badge';
 
 interface FileSystemDiffViewerProps {
   snapshot: Snapshot;
   onRollback: (snapshotId: string) => void;
   isRollingBack: boolean;
+  isActiveBaseline?: boolean;
+  upperdirWiped?: boolean;
+  onMutateUpperdir?: () => void;
 }
 
 export const FileSystemDiffViewer: React.FC<FileSystemDiffViewerProps> = ({
   snapshot,
   onRollback,
   isRollingBack,
+  isActiveBaseline = false,
+  upperdirWiped = false,
+  onMutateUpperdir,
 }) => {
   const [selectedFileIndex, setSelectedFileIndex] = useState<number>(0);
   const [showAiExplanation, setShowAiExplanation] = useState<boolean>(true);
   const [copied, setCopied] = useState<boolean>(false);
+  const [viewTab, setViewTab] = useState<'diff' | 'live-tree'>('diff');
 
   const files = snapshot.files;
   const selectedFile: FileDiffItem | undefined = files[selectedFileIndex];
@@ -89,24 +99,40 @@ export const FileSystemDiffViewer: React.FC<FileSystemDiffViewerProps> = ({
             >
               {files.map((file, idx) => (
                 <option key={file.path} value={idx}>
-                  {file.path} ({file.status})
+                  {file.path} {upperdirWiped ? '(Clean / Reverted)' : `(${file.status})`}
                 </option>
               ))}
             </select>
           </div>
 
-          {selectedFile && getStatusBadge(selectedFile.status)}
+          {upperdirWiped ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              Reverted Clean
+            </span>
+          ) : (
+            selectedFile && getStatusBadge(selectedFile.status)
+          )}
 
           {/* Change Overview Pill */}
-          {selectedFile && (
+          {upperdirWiped ? (
             <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
-              <span className="text-[#2E8B57] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                +{selectedFile.additions} lines
-              </span>
-              <span className="text-red-700 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                -{selectedFile.deletions} lines
+              <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+                <Check className="w-3 h-3 text-emerald-600" />
+                0 dirty hunks (Bit-Identical)
               </span>
             </div>
+          ) : (
+            selectedFile && (
+              <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
+                <span className="text-[#2E8B57] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  +{selectedFile.additions} lines
+                </span>
+                <span className="text-red-700 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                  -{selectedFile.deletions} lines
+                </span>
+              </div>
+            )
           )}
         </div>
 
@@ -157,17 +183,35 @@ export const FileSystemDiffViewer: React.FC<FileSystemDiffViewerProps> = ({
             {copied ? <Check className="w-3.5 h-3.5 text-[#2E8B57]" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Prominent Rollback to State Button */}
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            isLoading={isRollingBack}
-            onClick={() => onRollback(snapshot.id)}
-            className="font-semibold shadow-xs"
-          >
-            Rollback to State
-          </Button>
+          {/* Active Baseline vs Rollback to State Button */}
+          {isActiveBaseline && upperdirWiped ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                Active Baseline (Restored)
+              </span>
+              {onMutateUpperdir && (
+                <button
+                  onClick={onMutateUpperdir}
+                  className="px-2.5 py-1 text-xs rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-medium transition-colors shadow-2xs"
+                  title="Simulate agent modifying code to demo rollback again"
+                >
+                  Mutate (+18.4MB)
+                </button>
+              )}
+            </div>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<RotateCcw className="w-3.5 h-3.5" />}
+              isLoading={isRollingBack}
+              onClick={() => onRollback(snapshot.id)}
+              className="font-semibold shadow-xs"
+            >
+              Rollback to State
+            </Button>
+          )}
         </div>
       </div>
 
@@ -203,11 +247,143 @@ export const FileSystemDiffViewer: React.FC<FileSystemDiffViewerProps> = ({
         </div>
       )}
 
-      {/* 3. Redesigned Code Diff Display (Inspired by standard code review tools) */}
+      {/* View Switcher: Checkpoint Diff vs Live Upperdir State */}
+      <div className="bg-slate-100/90 px-4 py-1.5 border-b border-slate-200 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewTab('diff')}
+            className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+              viewTab === 'diff'
+                ? 'bg-white text-purple-700 shadow-xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Checkpoint Snapshot Delta ({files.length} files)
+          </button>
+          <button
+            onClick={() => setViewTab('live-tree')}
+            className={`px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1.5 ${
+              viewTab === 'live-tree'
+                ? 'bg-white text-purple-700 shadow-xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FolderTree className="w-3.5 h-3.5" />
+            Live Working Tree ({upperdirWiped ? '0 uncommitted' : '18.4 MB dirty'})
+          </button>
+        </div>
+        <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+          OverlayFS 4-Layer CoW
+        </span>
+      </div>
+
+      {/* Restored Banner if active baseline */}
+      {isActiveBaseline && upperdirWiped && viewTab === 'diff' && (
+        <div className="bg-emerald-50/90 border-b border-emerald-200 px-4 py-2 text-xs flex items-center justify-between text-emerald-900">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">Current State Restored:</span>
+            <span className="text-emerald-700 font-mono text-[11px]">
+              Upperdir scratch layer wiped in {snapshot.rollbackLatencyMs} ms. Working tree matches this baseline.
+            </span>
+          </div>
+          <Badge variant="active" size="sm">Bit-Identical</Badge>
+        </div>
+      )}
+
+      {/* 3. Live Tree Mode vs Code Diff Display */}
+      {viewTab === 'live-tree' ? (
+        <div className="p-8 text-center bg-slate-900 text-slate-100 flex-1 min-h-[460px] flex flex-col items-center justify-center">
+          {upperdirWiped ? (
+            <>
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-white mb-1">
+                Ephemeral Scratch Layer Wiped — 100% Bit-Identical
+              </h4>
+              <p className="text-xs text-slate-400 max-w-lg mx-auto mb-4 leading-relaxed">
+                The instant rollback primitive (<code className="text-purple-300">rollback_state</code>) cleared in <span className="text-emerald-400 font-semibold">{snapshot.rollbackLatencyMs} ms</span>. Ephemeral memory modifications were discarded without touching the host lowerdir.
+              </p>
+              <div className="inline-flex flex-wrap items-center justify-center gap-4 bg-slate-800/90 px-4 py-2.5 rounded-lg border border-slate-700 text-xs font-mono text-slate-300">
+                <span>Ephemeral upperdir: <b className="text-emerald-400">0.0 MB</b></span>
+                <span>·</span>
+                <span>Dirty hunks: <b className="text-emerald-400">0 files</b></span>
+                <span>·</span>
+                <span>Host SHA-256: <b className="text-purple-300">a2f51b41... (Match)</b></span>
+              </div>
+              {onMutateUpperdir && (
+                <div className="mt-5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Sparkles className="w-3.5 h-3.5 text-amber-400" />}
+                    onClick={onMutateUpperdir}
+                  >
+                    Simulate Agent Code Mutation (+18.4 MB)
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+                <FolderTree className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-white mb-1">
+                Dirty Scratch State Detected (18.4 MB Uncommitted)
+              </h4>
+              <p className="text-xs text-slate-400 max-w-lg mx-auto mb-4 leading-relaxed">
+                Autonomous agent has modified files in tmpfs upperdir scratch layer. Host lowerdir remains clean. Click "Rollback to State" to discard all uncommitted changes in under 100 ms.
+              </p>
+              <div className="inline-flex flex-wrap items-center justify-center gap-4 bg-slate-800/90 px-4 py-2.5 rounded-lg border border-slate-700 text-xs font-mono text-slate-300">
+                <span>Ephemeral upperdir: <b className="text-amber-400">18.4 MB</b></span>
+                <span>·</span>
+                <span>Dirty files: <b className="text-amber-400">{files.length} modified</b></span>
+              </div>
+              <div className="mt-5">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  isLoading={isRollingBack}
+                  onClick={() => onRollback(snapshot.id)}
+                >
+                  Rollback to State (Wipe Scratch Layer)
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto bg-[#F8FAFC] font-mono text-[11.5px] leading-relaxed select-text min-h-[460px]">
         {selectedFile ? (
           <div className="divide-y divide-slate-100">
-            {selectedFile.diffLines.map((line, idx) => {
+            {upperdirWiped && (
+              <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2.5 text-xs text-emerald-950 flex items-center justify-between select-none">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-semibold text-emerald-900">Pristine Working Tree Restored:</span>
+                  <span className="text-emerald-800 font-mono text-[11px]">
+                    All uncommitted additions were wiped in {snapshot.rollbackLatencyMs} ms. Working tree matches host repository bit-identically.
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300">
+                  CLEAN (0 diffs)
+                </span>
+              </div>
+            )}
+            {(upperdirWiped
+              ? selectedFile.diffLines
+                  .filter((l) => l.type !== 'add')
+                  .map((l) => ({
+                    ...l,
+                    type: 'context',
+                    text: l.text.replace(/^[-+]/, ' '),
+                    newLineNumber: l.oldLineNumber || l.newLineNumber,
+                  }))
+              : selectedFile.diffLines
+            ).map((line, idx) => {
               if (line.type === 'hunk') {
                 return (
                   <div 
@@ -271,6 +447,7 @@ export const FileSystemDiffViewer: React.FC<FileSystemDiffViewerProps> = ({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

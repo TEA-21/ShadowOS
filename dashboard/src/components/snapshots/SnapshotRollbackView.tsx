@@ -4,7 +4,10 @@ import {
   Plus, 
   CheckCircle2, 
   GitBranch, 
-  Zap
+  Zap,
+  ShieldCheck,
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 import type { Snapshot, MicroVM } from '../../types';
 import { Button } from '../common/Button';
@@ -18,6 +21,8 @@ interface SnapshotRollbackViewProps {
   onSelectVmId: (id: string) => void;
   onRollback: (snapshotId: string) => void;
   onCreateSnapshot: (name: string, description: string) => void;
+  activeBaselineSnapshotId?: string | null;
+  onMutateUpperdir?: (vmId?: string) => void;
 }
 
 export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
@@ -27,6 +32,8 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
   onSelectVmId,
   onRollback,
   onCreateSnapshot,
+  activeBaselineSnapshotId = null,
+  onMutateUpperdir,
 }) => {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>(
     snapshots[0]?.id || ''
@@ -38,6 +45,8 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
   } | null>(null);
 
   const selectedSnapshot = snapshots.find((s) => s.id === selectedSnapshotId) || snapshots[0];
+  const currentVm = vms.find((v) => v.id === selectedVmId) || vms[0];
+  const upperdirWiped = currentVm?.cowUpperSize === '0.0 MB';
 
   const handleRollbackClick = (snapshotId: string) => {
     setIsRollingBack(true);
@@ -70,7 +79,7 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
     <div className="space-y-4">
       {/* 1. Target Environment & Checkpoint Action Toolbar */}
       <div className="bg-white border border-slate-200 rounded-lg px-4 py-2.5 shadow-subtle flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
             <GitBranch className="w-4 h-4 text-purple-600" />
             <span>Target Environment:</span>
@@ -86,19 +95,49 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
               </option>
             ))}
           </select>
-          <span className="text-[11px] text-slate-400 font-mono hidden md:inline">
-            OverlayFS 4-Layer CoW
+
+          {/* Live CoW Upperdir Telemetry Pill */}
+          {upperdirWiped ? (
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              Upperdir: 0.0 MB (Wiped)
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs">
+              <AlertTriangle className="w-3 h-3 text-amber-600" />
+              Upperdir: {currentVm?.cowUpperSize || '18.4 MB'} (Dirty)
+            </span>
+          )}
+
+          {/* Host Workspace Protection Badge */}
+          <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-blue-50 text-blue-800 border border-blue-200 hidden md:flex items-center gap-1 shadow-2xs">
+            <ShieldCheck className="w-3 h-3 text-blue-600" />
+            Host Workspace: Bit-Identical
           </span>
         </div>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Plus className="w-3.5 h-3.5" />}
-          onClick={() => onCreateSnapshot('Manual Checkpoint', 'Snapshot saved prior to agent refactor')}
-        >
-          Create Checkpoint
-        </Button>
+        <div className="flex items-center gap-2">
+          {upperdirWiped && onMutateUpperdir && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+              onClick={() => onMutateUpperdir(selectedVmId)}
+              title="Simulate autonomous agent modifying files in tmpfs upperdir"
+            >
+              Simulate Mutation (+18.4MB)
+            </Button>
+          )}
+
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() => onCreateSnapshot('Manual Checkpoint', 'Snapshot saved prior to agent refactor')}
+          >
+            Create Checkpoint
+          </Button>
+        </div>
       </div>
 
       {/* Rollback Success Banner */}
@@ -111,7 +150,7 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
                 State Rollback Cleared in {rollbackSuccessBanner.elapsedMs} ms!
               </span>
               <span className="text-emerald-700 ml-1.5 font-mono text-[11px]">
-                Restored checkpoint [{rollbackSuccessBanner.snapshotId}]. Host working tree bit-identical.
+                Restored checkpoint [{rollbackSuccessBanner.snapshotId}]. Ephemeral upperdir wiped to 0.0 MB. Host working tree bit-identical.
               </span>
             </div>
           </div>
@@ -141,6 +180,8 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
           <div className="space-y-2">
             {snapshots.map((snap) => {
               const isSelected = snap.id === selectedSnapshotId;
+              const isActiveBaseline = activeBaselineSnapshotId === snap.id && upperdirWiped;
+
               return (
                 <div
                   key={snap.id}
@@ -148,15 +189,24 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
                   className={`p-3 bg-white border rounded-lg cursor-pointer transition-all shadow-subtle ${
                     isSelected
                       ? 'border-purple-600 ring-1 ring-purple-600 bg-purple-50/20'
+                      : isActiveBaseline
+                      ? 'border-emerald-500 ring-1 ring-emerald-500 bg-emerald-50/20'
                       : 'border-slate-200 hover:border-purple-300 hover:bg-slate-50/50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1.5 mb-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono text-xs font-bold text-slate-900">
                         {snap.id}
                       </span>
-                      {getTriggerBadge(snap.trigger)}
+                      {isActiveBaseline ? (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          ACTIVE BASELINE
+                        </span>
+                      ) : (
+                        getTriggerBadge(snap.trigger)
+                      )}
                     </div>
                     <span className="text-[10px] font-mono text-slate-400">
                       {snap.timestamp}
@@ -192,6 +242,9 @@ export const SnapshotRollbackView: React.FC<SnapshotRollbackViewProps> = ({
               snapshot={selectedSnapshot}
               onRollback={handleRollbackClick}
               isRollingBack={isRollingBack}
+              isActiveBaseline={activeBaselineSnapshotId === selectedSnapshot.id}
+              upperdirWiped={upperdirWiped}
+              onMutateUpperdir={() => onMutateUpperdir?.(selectedVmId)}
             />
           )}
         </div>

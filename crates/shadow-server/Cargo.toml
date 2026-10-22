@@ -1,0 +1,38 @@
+[package]
+name = "shadow-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "shadow-server"
+path = "src/main.rs"
+
+[lib]
+name = "shadow_server"
+path = "src/lib.rs"
+
+[dependencies]
+shadow-core = { path = "../shadow-core" }
+shadow-vmm = { path = "../shadow-vmm" }
+shadow-vsock = { path = "../shadow-vsock" }
+shadow-cow = { path = "../shadow-cow" }
+shadow-snapshot = { path = "../shadow-snapshot" }
+shadow-mcp = { path = "../shadow-mcp" }
+
+tokio.workspace = true
+futures-util = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tempfile.workspace = true
+similar.workspace = true
+sha2.workspace = true

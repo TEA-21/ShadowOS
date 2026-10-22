@@ -70,6 +70,20 @@ enum Commands {
         #[arg(short, long)]
         file: Option<String>,
     },
+    /// Launch the ShadowOS HTTP REST and WebSocket backend daemon for dashboard integration
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value_t = 3001)]
+        port: u16,
+
+        /// Bind host address
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
+
+        /// Path to target project repository
+        #[arg(short, long, default_value = ".")]
+        workspace: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -253,6 +267,23 @@ async fn main() -> anyhow::Result<()> {
             let new_host_hash =
                 shadow_cow::OverlayManager::compute_directory_sha256(&context.host_workspace)?;
             println!("\n[✓] Promotion complete. New Host Checksum: {}", new_host_hash);
+        }
+
+        Commands::Serve { port, host, workspace } => {
+            println!("============================================================");
+            println!(" ShadowOS Dashboard Backend Daemon (Axum + WebSockets)");
+            println!("============================================================");
+            println!("[*] Workspace: {}", workspace.display());
+            println!("[*] Launching shadow-server daemon on {}:{}...", host, port);
+
+            // Execute shadow-server binary
+            let status = std::process::Command::new("cargo")
+                .args(["run", "-p", "shadow-server", "--", "--port", &port.to_string(), "--host", &host, "--workspace", &workspace.to_string_lossy()])
+                .status()?;
+
+            if !status.success() {
+                eprintln!("[!] shadow-server exited with code: {:?}", status.code());
+            }
         }
     }
 

@@ -6,3 +6,25 @@ Cargo.lock
 Thumbs.db
 dashboard/node_modules/
 dashboard/dist/
+
+# Exclude Review Documents, PDFs, Assets, and Diagram Generation Scripts
+PatentTemplate.pdf
+"ShadowOS Implementation and Dataset Review.pdf"
+REVIEW_2.md
+REVIEW_3.md
+ShadowOS_Review_*.html
+ShadowOS_Review_*.pdf
+*.pdf
+
+# Review Assets & Diagrams
+assets_extracted/
+assets_review2/
+review_3_images/
+.codegraph/
+
+# Review and Diagram Generation Scripts
+scripts/extract_pdf_images.py
+scripts/generate_grayscale_charts.py
+scripts/generate_review2_pdf.py
+scripts/generate_review3_pdf.py
+scripts/generate_white_diagrams.py

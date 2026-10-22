@@ -96,7 +96,7 @@ impl DiffApp {
 
             self.files.push(FileDiff {
                 relative_path: file.relative_path.clone(),
-                change_type: file.change_type,
+                change_type: file.change_type.clone(),
                 hunks,
                 is_staged: false,
                 raw_diff,
@@ -214,14 +214,18 @@ impl DiffApp {
             }
             ActivePane::HunkList => {
                 if let Some(file) = self.files.get_mut(self.selected_file_index) {
+                    let mut status_info = None;
                     if let Some(hunk) = file.hunks.get_mut(self.selected_hunk_index) {
                         hunk.is_staged = !hunk.is_staged;
+                        status_info = Some((hunk.id, hunk.is_staged));
+                    }
+                    if let Some((hunk_id, is_staged)) = status_info {
                         file.is_staged = file.hunks.iter().any(|h| h.is_staged);
                         self.status_message = format!(
                             "Hunk #{} in '{}' {} staged.",
-                            hunk.id,
+                            hunk_id,
                             file.relative_path.display(),
-                            if hunk.is_staged { "is" } else { "is not" }
+                            if is_staged { "is" } else { "is not" }
                         );
                     }
                 }

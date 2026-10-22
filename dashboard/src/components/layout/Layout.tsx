@@ -1,7 +1,7 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import type { ActiveTab } from '../../types';
+import type { ActiveTab, BackendConnectionStatus, SystemInfo } from '../../types';
 
 interface LayoutProps {
   activeTab: ActiveTab;
@@ -12,6 +12,8 @@ interface LayoutProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   aggregateRamMb: number;
+  connectionStatus?: BackendConnectionStatus;
+  systemInfo?: SystemInfo | null;
   children: React.ReactNode;
 }
 
@@ -24,6 +26,8 @@ export const Layout: React.FC<LayoutProps> = ({
   searchQuery,
   onSearchChange,
   aggregateRamMb,
+  connectionStatus,
+  systemInfo,
   children,
 }) => {
   return (
@@ -45,6 +49,8 @@ export const Layout: React.FC<LayoutProps> = ({
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
           aggregateRamMb={aggregateRamMb}
+          connectionStatus={connectionStatus}
+          systemInfo={systemInfo}
         />
 
         {/* Scrollable Dashboard View */}
